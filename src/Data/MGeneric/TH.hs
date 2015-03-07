@@ -52,8 +52,9 @@ typeEncoding :: [Name] -> Type -> Name
 typeEncoding ps (viewAppType -> (VarT a, [])) = case index ps a of
   Nothing -> 'InK
   Just n  -> 'InP
-typeEncoding ps (viewAppType -> (ConT a, [])) = 'InK
-typeEncoding ps (viewAppType -> (ConT a, as)) = 'InA
+typeEncoding ps (viewAppType -> (ConT _, []))     = 'InK
+typeEncoding ps (viewAppType -> (ConT _, _))      = 'InA
+typeEncoding ps (viewAppType -> (ArrowT, [_, _])) = 'InA
 -- typeEncoding ps (viewAppType -> (a, as)) = fail (show (a, as))
 
 
@@ -66,6 +67,10 @@ encodeField ps (viewAppType -> (ConT a, [])) =
 encodeField ps (viewAppType -> (ConT a, as)) =
   appT
    (appT (conT '(:@:)) (conT a))
+   (foldr (\a -> appT (appT (conT '(:)) a)) (conT '[]) (encodeField ps <$> as))
+encodeField ps (viewAppType -> (ArrowT, as)) =
+  appT
+   (appT (conT '(:@:)) (pure ArrowT))
    (foldr (\a -> appT (appT (conT '(:)) a)) (conT '[]) (encodeField ps <$> as))
 encodeField ps (viewAppType -> (a, as)) = fail (show (a, as))
 
