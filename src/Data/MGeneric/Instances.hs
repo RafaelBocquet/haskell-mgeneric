@@ -98,17 +98,3 @@ instance MTraverse Last '[a -> b] t
 instance MTraverse First '[a -> b] t
 instance MTraverse Product '[a -> b] t
 instance MTraverse Sum '[a -> b] t
-
-data Test a b = Test [a -> b]
-deriveMGeneric ''Test
-instance Unapply (Test a b) Test '[a, b]
-instance MFunctor Test '[a' -> a, b -> b'] '[ContraV, CoV]
-
-test :: Test Int String -> Int -> [String]
-test (Test a) i = fmap ($ i) a
-
-a :: Test Int String
-a = Test [show, const "A"]
-
-b :: Test Int String
-b = mmap (HCons (+ 1) (HCons ("TEST " ++) HNil)) a
