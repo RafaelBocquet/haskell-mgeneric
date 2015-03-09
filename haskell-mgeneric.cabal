@@ -16,7 +16,8 @@ library
                        Data.MFoldable,
                        Data.MTraversable,
                        Data.HList,
-                       Data.HList.TH
+                       Data.HList.TH,
+                       Data.Unapply
   build-depends:       base >=4.8 && <4.9,
                        template-haskell,
                        lens,

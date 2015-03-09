@@ -3,10 +3,10 @@
 module Data.MTraversable where
 
 import Data.MGeneric
-import Data.MGeneric.Instances
 
 import Control.Applicative
 
+import Data.Unapply
 import Data.HList
 import Data.Proxy
 import Data.Nat
@@ -27,20 +27,32 @@ type family Codomains fs where
   Codomains ((a -> b) ': as) = b ': Codomains as
 
 class MTraverse (f :: k) (fs :: [*]) t | fs -> k where
-  mtraverse :: Applicative t => HList (AppMap fs t) -> f :$: Domains fs -> t (f :$: Codomains fs)
-  mtraverse = mtraverseP (Proxy :: Proxy f) (Proxy :: Proxy fs) (Proxy :: Proxy t)
-
   mtraverseP :: Applicative t => Proxy f -> Proxy fs -> Proxy t -> HList (AppMap fs t) -> f :$: Domains fs -> t (f :$: Codomains fs)
-  default mtraverseP :: (MGeneric (f :$: Domains fs), MGeneric (f :$: Codomains fs),
-                         Domains fs ~ Pars (f :$: Domains fs),
-                         Codomains fs ~ Pars (f :$: Codomains fs),
-                         Rep (f :$: Domains fs) ~ Rep (f :$: Codomains fs),
-                         GMTraverse (Rep (f :$: Domains fs)) fs t,
-                         Applicative t
+  default mtraverseP :: ( MGeneric (f :$: Domains fs), MGeneric (f :$: Codomains fs)
+                        , Domains fs ~ Pars (f :$: Domains fs)
+                        , Codomains fs ~ Pars (f :$: Codomains fs)
+                        , Rep (f :$: Domains fs) ~ Rep (f :$: Codomains fs)
+                        , GMTraverse (Rep (f :$: Domains fs)) fs t
+                        , Applicative t
                         )
                         => Proxy f -> Proxy fs -> Proxy t -> HList (AppMap fs t) -> f :$: Domains fs -> t (f :$: Codomains fs)
 
   mtraverseP _ pf _ fs = fmap to . mtraverseG pf fs . from
+
+class (AppMap fs t ~ fs') => UnAppMap fs t fs' | fs' -> fs
+instance UnAppMap '[] t '[]
+instance UnAppMap fs t fs' => UnAppMap ((a -> b) ': fs) t ((a -> t b) ': fs')
+
+mtraverse :: forall t f fs a b fs'.
+             ( Applicative t
+             , Unapply a f (Domains fs)
+             , Unapply b f (Codomains fs)
+             , UnAppMap fs t fs'
+             , MTraverse f fs t
+             ) => HList fs' -> a -> t b
+mtraverse = mtraverseP (Proxy :: Proxy f) (Proxy :: Proxy fs) (Proxy :: Proxy t)
+
+-- Sequence
 
 type family Map as t where
   Map '[]       t = '[]
@@ -57,20 +69,16 @@ instance SequenceMapId '[] t where
 instance SequenceMapId as t => SequenceMapId (a ': as) t where
   sequenceMapId _ pm = HCons id (sequenceMapId (Proxy :: Proxy as) pm)
 
-
-class MSequence (f :: k) (as :: [*]) t | as -> k where
-  msequence :: Applicative t => f :$: Map as t -> t (f :$: as)
-  msequence = msequenceP (Proxy :: Proxy f) (Proxy :: Proxy as) (Proxy :: Proxy t)
-
-  msequenceP :: Applicative t => Proxy f -> Proxy as -> Proxy t -> f :$: Map as t -> t (f :$: as)
-  default msequenceP :: (Applicative t,
-                         as ~ Codomains (SequenceMap as t),
-                         Domains (SequenceMap as t) ~ Map as t,
-                         MTraverse f (SequenceMap as t) t,
-                         SequenceMapId as t
-                        )
-                        => Proxy f -> Proxy as -> Proxy t -> f :$: Map as t -> t (f :$: as)
-  msequenceP pf pa pt = mtraverseP pf (Proxy :: Proxy (SequenceMap as t)) pt (sequenceMapId pa pt)
+msequence :: forall t f as a b.
+             ( Applicative t
+             , Unapply a f (Map as t)
+             , Unapply b f as
+             , Map as t ~ Domains (SequenceMap as t)
+             , as ~ Codomains (SequenceMap as t)
+             , MTraverse f (SequenceMap as t) t
+             , SequenceMapId as t
+             ) => a -> t b
+msequence = mtraverseP (Proxy :: Proxy f) (Proxy :: Proxy (SequenceMap as t)) (Proxy :: Proxy t) (sequenceMapId (Proxy :: Proxy as) (Proxy :: Proxy t))
 
 -- Generic
 
