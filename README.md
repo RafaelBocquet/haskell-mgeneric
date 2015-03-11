@@ -1,0 +1,146 @@
+# MGeneric : Generics with Multiple parameters
+
+This package provides an implementation of generics with multiple parameters in Haskell, as described in http://dreixel.net/research/pdf/gpmp_colour.pdf.
+
+A MGeneric instance can be derived for most datatypes with ```deriveMGeneric ''Type```
+
+It also provides the type classes MFunctor, MFoldable and MTraversable, generalisations of Functor, Foldable and Traversable to kinds other than (* -> *), and the type class MZipWith.
+
+# Examples
+
+## [MFunctor](src/Data/MFunctor.hs)
+
+
+```haskell
+kind Variance = CoV | ContraV
+-- f is the functor
+-- (fs :: [*]) are the mapping functions
+-- (vs :: [Variance]) are the variances of f
+mmap :: MFunctor f fs vs => HList fs -> f :$: Domains fs vs -> f :$: Codomains fs vs
+```
+
+
+```haskell
+data Test a b = Test [a -> b]
+deriveMGeneric ''Test
+instance Unapply (Test a b) Test '[a, b]
+instance MFunctor Test '[a' -> a, b -> b'] '[ContraV, CoV]
+
+test :: Test Int String -> Int -> [String]
+test (Test a) i = fmap ($ i) a
+
+a :: Test Int String
+a = Test [show, const "A"]
+
+b :: Test Int String
+b = mmap (HCons (+ 1) (HCons ("TEST " ++) HNil)) a
+```
+
+
+```haskell
+ghci> test b 41
+["TEST 42", "TEST A"]
+```
+
+## [MFoldable](src/Data/MFoldable.hs)
+
+```haskell
+-- MonoidMap as m ~ Map (\a -> (a -> m)) as
+mfoldMap :: (Monoid m, MFoldable f as) => HList (MonoidMap as m) -> f :$: as -> m
+```
+
+```haskell
+data Test a b c = Test ([a, [b]], c) deriving (Show)
+deriveMGeneric ''Test
+instance Unapply (Test a b c) Test '[a, b, c]
+instance MFoldable Test '[a, b, c]
+
+
+a :: Test Int String Char
+a = Test ([(0, [""]), (1, ["a", "b"]), (3, ["foo", "bar"])], 'e')
+```
+
+```haskell
+ghci> mfoldMap (const mempty `HCons` (Sum . length) `HCons` (Sum . ord) `HCons` HNil) a
+Sum 109
+```
+
+## [MTraversable](src/Data/MTraversable.hs)
+
+```haskell
+-- AppMap fs t ~ Map (\(a -> b) -> (a -> t b)) as
+mtraverse :: (MTraversable f fs t) => HList (AppMap fs t) -> f :$: Domains fs -> t (f :$: Codomains fs)
+-- SequenceMap as t ~ Map (\(a -> b) -> (t a -> t b)) as
+msequence :: (MTraversable f (SequenceMap as t) t) => f :$: Map as t -> t (f :$: as)
+```
+
+
+```haskell
+data Test a b c = Test ([a, [b]], c) deriving (Show)
+deriveMGeneric ''Test
+instance Unapply (Test a b c) Test '[a, b, c]
+instance MTraversable Test '[a -> a', b -> b', c -> c']
+
+
+a :: Test Int String Char
+a = Test ([(0, [""]), (1, ["a", "b"]), (3, ["foo", "bar"])], 'e')
+```
+
+
+```haskell
+ghci> evalState ?? "A"
+       $ mtraverse ((\i -> do { s' <- get; put (show i); return (length s') })
+            `HCons` (\s -> do { s' <- get; put s; return s' })
+            `HCons` pure `HCons` HNil) a
+Test ([(1,["0"]),(0,["1","a"]),(1,["3","foo"])],'e')
+```
+
+## [MZipWith](src/Data/MZipWith.hs) (Does not work yet without proxy types)
+
+```mzipWith``` zips n structures together if they have the same shape, or fails if the shapes do not match.
+
+```haskell
+-- ZipWithType NZ     f fs ~ Maybe (f :$: fs)
+-- ZipWithType (NS n) f fs ~ f :$: Domains fs -> ZipWithType n f (Codomains fs)
+mzipWith :: MZipWith n f fs => HList fs -> ZipWithType n f fs
+-- mzipWith n :: HList (a1 -> a2 -> ... -> an, ...) -> f a1 b1 ... -> f a2 b2 ... -> ... -> Maybe (f an bn ...)
+```
+
+
+```haskell
+data Test a b c = Test ([a, [b]], c) deriving (Show)
+deriveMGeneric ''Test
+instance Unapply (Test a b c) Test '[a, b, c]
+instance ( MZipWithG n Test (Rep (Test :$: LCodoms n '[f, g, h])) '[f, g, h]
+         , GMZipWith n (Rep (Test :$: LCodoms n '[f, g, h])) '[f, g, h]
+         ) => MZipWith n Test '[f, g, h]
+
+
+a :: Test Int String Char
+a = Test ([(0, [""]), (1, ["a", "b"]), (3, ["foo", "bar"])], 'e')
+
+b :: Test Int String Char
+b = Test ([(1,["0"]),(0,["1","a"]),(1,["3","foo"])],'h')
+```
+
+
+```haskell
+ghci> mzipWithP (Proxy :: Proxy (NS (NS NZ))) (Proxy :: Proxy Test)
+        ((+) `HCons` (++) `HCons` const `HCons` HNil)
+        a b
+Just (Test ([(1,["0"]),(1,["a1","ba"]),(4,["foo3","barfoo"])],'e')
+ghci> mzipWithP (Proxy :: Proxy (NS (NS NZ))) (Proxy :: Proxy Test)
+        ((+) `HCons` (++) `HCons` const `HCons` HNil)
+        a (Test [])
+Nothing
+```
+
+## TODO
+
+* Add more generic type classes
+* Add inline annotations
+* Add documentation
+* Handle FK in ZipWith ?
+* Reduce the need for Proxy types
+* Find more suitable names for type level functions
+* Handle all cases in deriveMGeneric, and provide more relevant error messages

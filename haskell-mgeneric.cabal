@@ -1,5 +1,5 @@
-name:                haskell-mgeneric
-version:             0.1.0.0
+name:                mgeneric
+version:             0.0.0.0
 license:             MIT
 license-file:        LICENSE
 author:              Rafaël Bocquet
@@ -7,7 +7,11 @@ maintainer:          rafaelbocquet+github@gmail.com
 category:            Data
 build-type:          Simple
 cabal-version:       >=1.10
-
+homepage:            http://github.com/RafaelBocquet/haskell-mgeneric/
+bug-reports:         http://github.com/RafaelBocquet/haskell-mgeneric/issues
+synopsis:            TODO
+description:         TODO
+                      
 library
   exposed-modules:     Data.MGeneric,
                        Data.MGeneric.TH,
@@ -16,9 +20,11 @@ library
                        Data.MFoldable,
                        Data.MTraversable,
                        Data.HList,
+                       Data.Nat,
                        Data.HList.TH,
-                       Data.Unapply
-  build-depends:       base >=4.8 && <4.9,
+                       Data.Unapply,
+                       Data.MZipWith
+  build-depends:       base >=4.5 && <5,
                        template-haskell,
                        lens,
                        mtl,

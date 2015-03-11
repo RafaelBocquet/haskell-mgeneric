@@ -25,7 +25,7 @@ type family Codomains fs vs where
 type family Flip f where
   Flip (a -> b) = (b -> a)
 
-class MFunctor (f :: k) (fs :: [*]) (vs ::  [Variance]) | fs -> k, vs -> k, f -> vs where
+class MFunctor (f :: k) (fs :: [*]) (vs ::  [Variance]) | f -> vs, fs -> k, vs -> k where
   mmapP :: Proxy f -> Proxy vs -> HList fs -> f :$: Domains fs vs -> f :$: Codomains fs vs
   default mmapP :: ( MGeneric (f :$: Domains fs vs), MGeneric (f :$: Codomains fs vs),
                      Rep (f :$: Domains fs vs) ~ Rep (f :$: Codomains fs vs),
@@ -105,23 +105,49 @@ instance (GFPMFunctor n ps vs ,
           (ps :!: n) ~ (Domains ps vs :!: n -> Codomains ps vs :!: n)
          )
          => AdaptFieldFunction (FP n ': as) (CoV ': vfs) ps vs where
-  adaptFieldFunction _ _ pv ps = HCons (mmapGFP (Proxy :: Proxy n) pv ps) (adaptFieldFunction (Proxy :: Proxy as) (Proxy :: Proxy vfs) pv ps)
+  adaptFieldFunction _ _ pv ps =
+    HCons
+    (mmapGFP (Proxy :: Proxy n) pv ps)
+    (adaptFieldFunction (Proxy :: Proxy as) (Proxy :: Proxy vfs) pv ps)
 
 instance (GFPMFunctor n ps vs ,
           AdaptFieldFunction as vfs ps vs,
           Flip (ps :!: n) ~ (Domains ps vs :!: n -> Codomains ps vs :!: n)
          )
          => AdaptFieldFunction (FP n ': as) (ContraV ': vfs) ps vs where
-  adaptFieldFunction _ _ pv ps = HCons (mmapGFP (Proxy :: Proxy n) pv ps) (adaptFieldFunction (Proxy :: Proxy as) (Proxy :: Proxy vfs) pv ps)
+  adaptFieldFunction _ _ pv ps =
+    HCons
+    (mmapGFP (Proxy :: Proxy n) pv ps)
+    (adaptFieldFunction (Proxy :: Proxy as) (Proxy :: Proxy vfs) pv ps)
 
-instance (MFunctor f (ExpandFieldFunction bs vs' ps vs) vs',
-          ExpandField bs (Codomains ps vs) ~ Codomains (ExpandFieldFunction bs vs' ps vs) vs',
-          ExpandField bs (Domains ps vs) ~ Domains (ExpandFieldFunction bs vs' ps vs) vs',
-          AdaptFieldFunction bs vs' ps vs,
-          AdaptFieldFunction as vfs ps vs 
+instance ( MFunctor f (ExpandFieldFunction bs vs' ps vs) vs',
+           ExpandField bs (Codomains ps vs) ~ Codomains (ExpandFieldFunction bs vs' ps vs) vs',
+           ExpandField bs (Domains ps vs) ~ Domains (ExpandFieldFunction bs vs' ps vs) vs',
+           AdaptFieldFunction bs vs' ps vs,
+           AdaptFieldFunction as vfs ps vs 
          )
          => AdaptFieldFunction ((f :@: bs) ': as) (CoV ': vfs) ps vs where
-  adaptFieldFunction _ _ pv ps = HCons (mmapP (Proxy :: Proxy f) (Proxy :: Proxy vs') (adaptFieldFunction (Proxy :: Proxy bs) (Proxy :: Proxy vs') pv ps)) (adaptFieldFunction (Proxy :: Proxy as) (Proxy :: Proxy vfs) pv ps)
+  adaptFieldFunction _ _ pv ps =
+    HCons
+    (mmapP (Proxy :: Proxy f) (Proxy :: Proxy vs') (adaptFieldFunction (Proxy :: Proxy bs) (Proxy :: Proxy vs') pv ps))
+    (adaptFieldFunction (Proxy :: Proxy as) (Proxy :: Proxy vfs) pv ps)
+
+type family FlipVariance vs where
+  FlipVariance '[]             = '[]
+  FlipVariance (CoV ': vs)     = ContraV ': FlipVariance vs
+  FlipVariance (ContraV ': vs) = CoV ': FlipVariance vs
+
+instance ( MFunctor f (ExpandFieldFunction bs (FlipVariance vs') ps vs) vs'
+         , ExpandField bs (Domains ps vs) ~ Codomains (ExpandFieldFunction bs (FlipVariance vs') ps vs) vs'
+         , ExpandField bs (Codomains ps vs) ~ Domains (ExpandFieldFunction bs (FlipVariance vs') ps vs) vs'
+         , AdaptFieldFunction bs (FlipVariance vs') ps vs
+         , AdaptFieldFunction as vfs ps vs 
+         )
+         => AdaptFieldFunction ((f :@: bs) ': as) (ContraV ': vfs) ps vs where
+  adaptFieldFunction _ _ pv ps =
+    HCons
+    (mmapP (Proxy :: Proxy f) (Proxy :: Proxy vs') (adaptFieldFunction (Proxy :: Proxy bs) (Proxy :: Proxy (FlipVariance vs')) pv ps))
+    (adaptFieldFunction (Proxy :: Proxy as) (Proxy :: Proxy vfs) pv ps)
 
 instance (MFunctor f (ExpandFieldFunction as vs' ps vs) vs',
           ExpandField as (Codomains ps vs) ~ Codomains (ExpandFieldFunction as vs' ps vs) vs',

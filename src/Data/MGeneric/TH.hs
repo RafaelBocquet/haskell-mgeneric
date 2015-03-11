@@ -2,6 +2,8 @@
 
 module Data.MGeneric.TH where
 
+import Prelude hiding (foldr, foldl)
+
 import Data.Nat
 import Data.MGeneric
 
@@ -17,7 +19,7 @@ import Language.Haskell.TH.Lens
 
 import Unsafe.Coerce
 
-import Data.Function
+import Data.Function hiding ((&))
 
 viewData :: Dec -> Maybe (Cxt, Name, [TyVarBndr], [Con], [Name])
 viewData (DataD a b c d e)    = Just (a, b, c, d, e)
@@ -52,9 +54,10 @@ typeEncoding :: [Name] -> Type -> Name
 typeEncoding ps (viewAppType -> (VarT a, [])) = case index ps a of
   Nothing -> 'InK
   Just n  -> 'InP
-typeEncoding ps (viewAppType -> (ConT _, []))     = 'InK
-typeEncoding ps (viewAppType -> (ConT _, _))      = 'InA
-typeEncoding ps (viewAppType -> (ArrowT, [_, _])) = 'InA
+typeEncoding ps (viewAppType -> (ConT _, []))      = 'InK
+typeEncoding ps (viewAppType -> (ConT _, _))       = 'InA
+typeEncoding ps (viewAppType -> (ArrowT, [_, _]))  = 'InA
+typeEncoding ps (viewAppType -> (TupleT _, (_:_))) = 'InA
 -- typeEncoding ps (viewAppType -> (a, as)) = fail (show (a, as))
 
 
@@ -72,8 +75,17 @@ encodeField ps (viewAppType -> (ArrowT, as)) =
   appT
    (appT (conT '(:@:)) (pure ArrowT))
    (foldr (\a -> appT (appT (conT '(:)) a)) (conT '[]) (encodeField ps <$> as))
+encodeField ps (viewAppType -> (TupleT n, as)) =
+  appT
+   (appT (conT '(:@:)) (pure (TupleT n)))
+   (foldr (\a -> appT (appT (conT '(:)) a)) (conT '[]) (encodeField ps <$> as))
 encodeField ps (viewAppType -> (a, as)) = fail (show (a, as))
 
+foldBinary :: (a -> a -> a) -> a -> [a] -> a
+foldBinary f x []  = x
+foldBinary f x [a] = a
+foldBinary f x as  = let (xs, ys) = splitAt (length as `div` 2) as
+                     in f (foldBinary f x xs) (foldBinary f x ys)
 
 deriveMGeneric :: Name -> Q [Dec]
 deriveMGeneric n = do
@@ -83,13 +95,11 @@ deriveMGeneric n = do
           rep  = tySynInstD
                  ''Rep
                  (tySynEqn [ty]
-                  $ foldr ?? (conT 'UV) ?? (fmap snd cons)
-                  $ \con ->
-                           appT
-                            (appT
-                             (conT '(:++:))
-                             (foldr (\a -> appT (appT (conT '(:**:)) a)) (conT 'UT) (appT (conT 'UF) . encodeField tvs <$> con))
-                            )
+                  $ foldBinary (\a -> appT (appT (conT '(:++:)) a)) (conT 'UV)
+                  $ cons
+                   <&> snd
+                   <&> fmap (appT (conT 'UF) . encodeField tvs)
+                   <&> foldBinary (\a -> appT (appT (conT '(:**:)) a)) (conT 'UT)
                  )
           pars = tySynInstD
                  ''Pars
@@ -97,18 +107,18 @@ deriveMGeneric n = do
                   (foldr (appT . appT (conT '(:))) (conT '[]) (varT <$> tvs))
                  )
           from = funD 'Data.MGeneric.from
-                  $ zip cons (iterate (appE (conE 'InR) .) (appE (conE 'InL)))
+                  $ zip cons (foldBinary (\a b -> fmap (appE (conE 'InL) .) a ++ fmap (appE (conE 'InR) .) b) [] (replicate (length cons) [id]))
                   <&> \((nm, tys), scon) -> do
                     vs <- forM tys $ \ty -> newName "x" <&> \x -> (x, typeEncoding tvs ty)
                     clause [conP nm (varP . fst <$> vs)] ?? []
                      $ normalB
                      $ scon
-                     $ foldr (\a -> appE (appE (conE '(:*:)) a)) (conE 'InT) (vs <&> \(v, n) -> appE (conE 'InF) (appE (conE n) (varE v)))
+                     $ foldBinary (\a -> appE (appE (conE '(:*:)) a)) (conE 'InT) (vs <&> \(v, n) -> appE (conE 'InF) (appE (conE n) (varE v)))
           to   = funD 'Data.MGeneric.to
-                  $ zip cons (iterate (\p q -> conP 'InR [p q]) (\p -> conP 'InL [p]))
+                  $ zip cons (foldBinary (\a b -> fmap ((conP 'InL . (: [])) .) a ++ fmap ((conP 'InR . (: [])) .) b) [] (replicate (length cons) [id]))
                   <&> \((nm, tys), spat) -> do
                     vs <- forM tys $ \ty -> newName "x" <&> \x -> (x, typeEncoding tvs ty)
-                    let vsp = foldr (\a b -> conP '(:*:) [a, b]) (conP 'InT []) (vs <&> \(v, n) -> conP 'InF [conP n [varP v]])
+                    let vsp = foldBinary (\a b -> conP '(:*:) [a, b]) (conP 'InT []) (vs <&> \(v, n) -> conP 'InF [conP n [varP v]])
                     clause [spat vsp] ?? []
                      $ normalB
                      $ foldl appE (conE nm) (appE (varE 'unsafeCoerce) . varE . fst <$> vs)

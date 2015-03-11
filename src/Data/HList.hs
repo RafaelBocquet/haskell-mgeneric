@@ -9,6 +9,8 @@ data HList as where
   HNil  :: HList '[]
   HCons :: a -> HList as -> HList (a ': as)
 
+infixr 6 `HCons`
+
 class HNth as n where
   hnth :: HList as -> Proxy n -> as :!: n
   
