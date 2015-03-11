@@ -43,25 +43,25 @@ deriveMGeneric ''Endo
 deriveMGeneric ''Const
 deriveMGeneric ''Identity
 
-instance MFunctor [] '[a -> a'] '[CoV]
-instance MFunctor Maybe '[a -> a'] '[CoV]
-instance MFunctor Either '[a -> a', b -> b'] '[CoV, CoV]
+instance MFunctor [] '[a -> a'] '[ 'CoV]
+instance MFunctor Maybe '[a -> a'] '[ 'CoV]
+instance MFunctor Either '[a -> a', b -> b'] '[ 'CoV, 'CoV]
 instance MFunctor Bool '[] '[]
 instance MFunctor Ordering '[] '[]
 instance MFunctor () '[] '[]
-instance MFunctor (,) '[a -> a', b -> b'] '[CoV, CoV]
-instance MFunctor (,,) '[a -> a', b -> b', c -> c'] '[CoV, CoV, CoV]
-instance MFunctor (,,,) '[a -> a', b -> b', c -> c', d -> d'] '[CoV, CoV, CoV, CoV]
-instance MFunctor (,,,,) '[a -> a', b -> b', c -> c', d -> d', e -> e'] '[CoV, CoV, CoV, CoV, CoV]
-instance MFunctor (,,,,,) '[a -> a', b -> b', c -> c', d -> d', e -> e', f -> f'] '[CoV, CoV, CoV, CoV, CoV, CoV]
-instance MFunctor (,,,,,,) '[a -> a', b -> b', c -> c', d -> d', e -> e', f -> f', g -> g'] '[CoV, CoV, CoV, CoV, CoV, CoV, CoV]
-instance MFunctor (,,,,,,,) '[a -> a', b -> b', c -> c', d -> d', e -> e', f -> f', g -> g', h -> h'] '[CoV, CoV, CoV, CoV, CoV, CoV, CoV, CoV]
-instance MFunctor (,,,,,,,,) '[a -> a', b -> b', c -> c', d -> d', e -> e', f -> f', g -> g', h -> h', i -> i'] '[CoV, CoV, CoV, CoV, CoV, CoV, CoV, CoV, CoV]
-instance MFunctor Last '[a -> b] '[CoV]
-instance MFunctor First '[a -> b] '[CoV]
-instance MFunctor Product '[a -> b] '[CoV]
-instance MFunctor Sum '[a -> b] '[CoV]
-instance MFunctor (->) '[a' -> a, b -> b'] '[ContraV, CoV] where
+instance MFunctor (,) '[a -> a', b -> b'] '[ 'CoV, 'CoV]
+instance MFunctor (,,) '[a -> a', b -> b', c -> c'] '[ 'CoV, 'CoV, 'CoV]
+instance MFunctor (,,,) '[a -> a', b -> b', c -> c', d -> d'] '[ 'CoV, 'CoV, 'CoV, 'CoV]
+instance MFunctor (,,,,) '[a -> a', b -> b', c -> c', d -> d', e -> e'] '[ 'CoV, 'CoV, 'CoV, 'CoV, 'CoV]
+instance MFunctor (,,,,,) '[a -> a', b -> b', c -> c', d -> d', e -> e', f -> f'] '[ 'CoV, 'CoV, 'CoV, 'CoV, 'CoV, 'CoV]
+instance MFunctor (,,,,,,) '[a -> a', b -> b', c -> c', d -> d', e -> e', f -> f', g -> g'] '[ 'CoV, 'CoV, 'CoV, 'CoV, 'CoV, 'CoV, 'CoV]
+instance MFunctor (,,,,,,,) '[a -> a', b -> b', c -> c', d -> d', e -> e', f -> f', g -> g', h -> h'] '[ 'CoV, 'CoV, 'CoV, 'CoV, 'CoV, 'CoV, 'CoV, 'CoV]
+instance MFunctor (,,,,,,,,) '[a -> a', b -> b', c -> c', d -> d', e -> e', f -> f', g -> g', h -> h', i -> i'] '[ 'CoV, 'CoV, 'CoV, 'CoV, 'CoV, 'CoV, 'CoV, 'CoV, 'CoV]
+instance MFunctor Last '[a -> b] '[ 'CoV]
+instance MFunctor First '[a -> b] '[ 'CoV]
+instance MFunctor Product '[a -> b] '[ 'CoV]
+instance MFunctor Sum '[a -> b] '[ 'CoV]
+instance MFunctor (->) '[a' -> a, b -> b'] '[ 'ContraV, 'CoV] where
   mmapP _ _ (HCons f (HCons g HNil)) x = g . x . f
 
 -- instance (Functor/Contravariant/Bifunctor/Profunctor) f => MFunctor would be nice, but it breaks functional dependencies

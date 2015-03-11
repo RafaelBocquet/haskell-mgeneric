@@ -11,7 +11,11 @@ homepage:            http://github.com/RafaelBocquet/haskell-mgeneric/
 bug-reports:         http://github.com/RafaelBocquet/haskell-mgeneric/issues
 synopsis:            Generics with multiple parameters
 description:         TODO
-                      
+ 
+source-repository head
+  type:     git
+  location: git://github.com/RafaelBocquet/haskell-mgeneric.git
+                     
 library
   exposed-modules:     Data.MGeneric,
                        Data.MGeneric.TH,
