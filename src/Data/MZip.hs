@@ -91,6 +91,8 @@ instance Unapply a f fs => ZipWithTypeC NZ f fs (Maybe a)
 instance (Unapply a f (Doms fs), ZipWithTypeC n f (Codoms fs) b) => ZipWithTypeC (NS n) f fs (a -> b)
 
 -- | `mzipWith` zips n structures together if they have the same shape, or fails (with `Nothing`) if the shapes do not match.
+--
+-- > mzipWith :: HList '[a11 -> ... -> an1 -> b1, ...] -> f a11 ... a1m -> f an1 ... anm -> f b1 ... bm
 mzipWith :: forall n f fs b.
             ( MZipWith n f fs
             , MakeZipInputs n fs

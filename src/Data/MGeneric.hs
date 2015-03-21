@@ -22,6 +22,7 @@ type family (f :: k) :$: (as :: [*]) :: * where
   f :$: (a ': as) = f a :$: as
 
 -- | Universe kind
+--
 -- The s parameter should always be *
 data Un s = UV             -- ^ Empty universe
           | UT             -- ^ Trivial universe

@@ -35,7 +35,7 @@ class MFoldable (f :: k) (as :: [*]) | as -> k where
 
 -- | Map elements of each parameter type of a structure to a monoid, and combine the results.
 --
--- Proxy-less version of mfoldMapP
+-- Proxy-less version of `mfoldMapP`
 --
 -- > mfoldMap :: HList '[a1 -> m, ..., an -> m] -> f :$: '[a1, ..., an] -> m
 mfoldMap :: forall m a f as.

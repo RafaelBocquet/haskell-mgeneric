@@ -1,5 +1,8 @@
 # MGeneric : Generics with Multiple parameters
 
+https://hackage.haskell.org/package/mgeneric
+
+
 This package provides an implementation of generics with multiple parameters in Haskell, as described in http://dreixel.net/research/pdf/gpmp_colour.pdf.
 
 A MGeneric instance can be derived for most datatypes with ```deriveMGeneric ''Type```
@@ -140,3 +143,4 @@ Just (Test ([(1,["0"]),(1,["a1","ba"]),(4,["foo3","barfoo"])],0))
 * Reduce the need for Proxy types
 * Find more suitable names for type level functions
 * Handle all cases in deriveMGeneric, and provide more relevant error messages
+* Drop the dependency on lens

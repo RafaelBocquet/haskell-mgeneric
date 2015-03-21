@@ -1,4 +1,5 @@
 {-# LANGUAGE LambdaCase, ViewPatterns, TemplateHaskell, TypeOperators, DataKinds #-}
+{-# OPTIONS_HADDOCK prune #-}
 
 module Data.MGeneric.TH where
 
@@ -87,6 +88,8 @@ foldBinary f x [a] = a
 foldBinary f x as  = let (xs, ys) = splitAt (length as `div` 2) as
                      in f (foldBinary f x xs) (foldBinary f x ys)
 
+
+-- | `deriveMGeneric` derives a `MGeneric` instance for a type, when possible. (for ADT types with parameters of kind *)
 deriveMGeneric :: Name -> Q [Dec]
 deriveMGeneric n = do
   reify n >>= \case

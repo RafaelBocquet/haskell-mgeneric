@@ -14,14 +14,19 @@ import Data.Proxy
 import Data.Nat
 import Unsafe.Coerce
 
+-- | > AppMap ((a1 -> b1) : ...) t ~ (a1 -> t b1) : ...
 type family AppMap fs t where
   AppMap '[]              t = '[]
   AppMap ((a -> b) ': fs) t = (a -> t b) ': AppMap fs t
 
+-- | > Domain (a -> b) ~ a
+--   > Domains fs ~ Map Domain fs
 type family Domains fs where
   Domains '[]              = '[]
   Domains ((a -> b) ': as) = a ': Domains as
   
+-- | > Codomain (a -> b) ~ b
+--   > Codomains fs ~ Map Codomain fs 
 type family Codomains fs where
   Codomains '[]              = '[]
   Codomains ((a -> b) ': as) = b ': Codomains as
@@ -72,6 +77,7 @@ instance SequenceMapId '[] t where
 instance SequenceMapId as t => SequenceMapId (a ': as) t where
   sequenceMapId _ pm = HCons id (sequenceMapId (Proxy :: Proxy as) pm)
 
+-- | > msequence :: f (t a1) ... (t an) -> t (f a1 ... an)
 msequence :: forall t f as a b.
              ( Applicative t
              , Unapply a f (Map t as)

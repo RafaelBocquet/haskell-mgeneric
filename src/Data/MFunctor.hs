@@ -43,6 +43,7 @@ type family Flip f where
 -- If `f` has a `MGeneric` instance, and types that appear in `f` have a `MFunctor` instance, it is possible to derive a `MFunctor` instance for f.
 --
 -- >>> instance MFunctor [] '[a -> a'] '[CoV]
+-- >>> instance MFunctor (->) '[a' -> a, b -> b'] '[ContraV, CoV]
 class MFunctor (f :: k) (fs :: [*]) (vs ::  [Variance]) | f -> vs, fs -> k, vs -> k where
   -- | see `mmap`
   mmapP :: Proxy f -> Proxy vs -> HList fs -> f :$: Domains fs vs -> f :$: Codomains fs vs
@@ -59,6 +60,10 @@ class MFunctor (f :: k) (fs :: [*]) (vs ::  [Variance]) | f -> vs, fs -> k, vs -
 -- If f is covariant in all its parameters (its variances are '[CoV, CoV, ..., CoV]) :
 -- 
 -- > mmap :: HList '[a1 -> b1, ..., an -> bn] -> f a1 ... an -> f b1 ... bn
+--
+-- e.g. when f is contravariant in some parameters (variances of (->) are '[ContraV, CoV])
+--
+-- > mmap :: HList '[b1 -> a1, a2 -> b2] -> (a1 -> a2) -> (b1 -> b2)
 mmap :: forall a b f fs vs.
         ( Unapply a f (Domains fs vs)
         , Unapply b f (Codomains fs vs)
