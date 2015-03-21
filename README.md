@@ -76,7 +76,7 @@ msequence :: (MTraversable f (SequenceMap as t) t) => f :$: Map as t -> t (f :$:
 
 
 ```haskell
-data Test a b c = Test ([a, [b]], c) deriving (Show)
+data Test a b c = Test ([(a, [b])], c) deriving (Show)
 deriveMGeneric ''Test
 instance Unapply (Test a b c) Test '[a, b, c]
 instance MTraversable Test '[a -> a', b -> b', c -> c']
@@ -95,9 +95,10 @@ ghci> evalState ?? "A"
 Test ([(1,["0"]),(0,["1","a"]),(1,["3","foo"])],'e')
 ```
 
-## [MZipWith](src/Data/MZipWith.hs) (Does not work yet without proxy types)
+## [MZipWith](src/Data/MZip.hs) (Does not work yet without proxy types)
 
-```mzipWith``` zips n structures together if they have the same shape, or fails if the shapes do not match.
+```mzipWith``` zips n structures together if they have the same shape, or fails (with `Nothing`) if the shapes do not match.
+
 
 ```haskell
 -- ZipWithType NZ     f fs ~ Maybe (f :$: fs)
@@ -106,9 +107,8 @@ mzipWith :: MZipWith n f fs => HList fs -> ZipWithType n f fs
 -- mzipWith n :: HList (a1 -> a2 -> ... -> an, ...) -> f a1 b1 ... -> f a2 b2 ... -> ... -> Maybe (f an bn ...)
 ```
 
-
 ```haskell
-data Test a b c = Test ([a, [b]], c) deriving (Show)
+data Test a b c = Test ([(a, [b])], c) deriving (Show)
 deriveMGeneric ''Test
 instance Unapply (Test a b c) Test '[a, b, c]
 instance ( MZipWithG n Test (Rep (Test :$: LCodoms n '[f, g, h])) '[f, g, h]
@@ -121,18 +121,14 @@ a = Test ([(0, [""]), (1, ["a", "b"]), (3, ["foo", "bar"])], 'e')
 
 b :: Test Int String Char
 b = Test ([(1,["0"]),(0,["1","a"]),(1,["3","foo"])],'h')
+
+c :: Maybe (Test Int String Int)
+c = mzipWith ((\a b -> Just (a + b)) `HCons` (\a b -> Just (a ++ b)) `HCons` (\a b -> Just 0) `HCons` HNil) a b
 ```
 
-
 ```haskell
-ghci> mzipWithP (Proxy :: Proxy (NS (NS NZ))) (Proxy :: Proxy Test)
-        ((+) `HCons` (++) `HCons` const `HCons` HNil)
-        a b
-Just (Test ([(1,["0"]),(1,["a1","ba"]),(4,["foo3","barfoo"])],'e')
-ghci> mzipWithP (Proxy :: Proxy (NS (NS NZ))) (Proxy :: Proxy Test)
-        ((+) `HCons` (++) `HCons` const `HCons` HNil)
-        a (Test [])
-Nothing
+ghci> c
+Just (Test ([(1,["0"]),(1,["a1","ba"]),(4,["foo3","barfoo"])],0))
 ```
 
 ## TODO
@@ -140,6 +136,7 @@ Nothing
 * Add more generic type classes
 * Add inline annotations
 * Add documentation
+* Remove Maybe in ZipWith interface
 * Handle FK in ZipWith ?
 * Reduce the need for Proxy types
 * Find more suitable names for type level functions

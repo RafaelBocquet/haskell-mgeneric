@@ -1,4 +1,6 @@
 {-# LANGUAGE DataKinds, MultiParamTypeClasses, FunctionalDependencies, TypeOperators, PolyKinds, TypeFamilies, FlexibleInstances, ScopedTypeVariables, UndecidableInstances, DefaultSignatures, FlexibleContexts, InstanceSigs #-}
+{-# OPTIONS_HADDOCK prune #-}
+
 
 module Data.MTraversable where
 
@@ -12,8 +14,6 @@ import Data.Proxy
 import Data.Nat
 import Unsafe.Coerce
 
--- Traverse
-
 type family AppMap fs t where
   AppMap '[]              t = '[]
   AppMap ((a -> b) ': fs) t = (a -> t b) ': AppMap fs t
@@ -26,7 +26,9 @@ type family Codomains fs where
   Codomains '[]              = '[]
   Codomains ((a -> b) ': as) = b ': Codomains as
 
+-- | `Traversable` type class, generalisation of `Data.Traversable.Traversable`, `Data.Bitraversable.Bitraversable`, etc.
 class MTraversable (f :: k) (fs :: [*]) t | fs -> k where
+  -- | see `mtraverse`
   mtraverseP :: Applicative t => Proxy f -> Proxy fs -> Proxy t -> HList (AppMap fs t) -> f :$: Domains fs -> t (f :$: Codomains fs)
   default mtraverseP :: ( MGeneric (f :$: Domains fs), MGeneric (f :$: Codomains fs)
                         , Domains fs ~ Pars (f :$: Domains fs)
@@ -43,6 +45,13 @@ class (AppMap fs t ~ fs') => UnAppMap fs t fs' | fs' -> fs
 instance UnAppMap '[] t '[]
 instance UnAppMap fs t fs' => UnAppMap ((a -> b) ': fs) t ((a -> t b) ': fs')
 
+-- | Map elements of all type parameters of a structure to an action, evaluate these actions from left to right, and collect the results.
+--
+-- Proxy-less version of `mtraverseP`
+--
+-- Generalisation of `Data.Traversable.traverse`, `Data.Bitraversable.bitraverse`, etc.
+--
+-- > mtraverse :: HList '[a1 -> f b1, ..., an -> f bn] -> f a1 ... an -> t (f b1 ... bn)
 mtraverse :: forall t f fs a b fs'.
              ( Applicative t
              , Unapply a f (Domains fs)
@@ -51,12 +60,6 @@ mtraverse :: forall t f fs a b fs'.
              , MTraversable f fs t
              ) => HList fs' -> a -> t b
 mtraverse = mtraverseP (Proxy :: Proxy f) (Proxy :: Proxy fs) (Proxy :: Proxy t)
-
--- Sequence
-
-type family Map as t where
-  Map '[]       t = '[]
-  Map (a ': as) t = t a ': Map as t
 
 type family SequenceMap as t where
    SequenceMap '[]       t = '[]
@@ -71,9 +74,9 @@ instance SequenceMapId as t => SequenceMapId (a ': as) t where
 
 msequence :: forall t f as a b.
              ( Applicative t
-             , Unapply a f (Map as t)
+             , Unapply a f (Map t as)
              , Unapply b f as
-             , Map as t ~ Domains (SequenceMap as t)
+             , Map t as ~ Domains (SequenceMap as t)
              , as ~ Codomains (SequenceMap as t)
              , MTraversable f (SequenceMap as t) t
              , SequenceMapId as t
@@ -123,7 +126,7 @@ type family ExpandFieldFunction (f :: [Field *]) (ps :: [*]) :: [*] where
   ExpandFieldFunction '[]          ps       = '[]
   ExpandFieldFunction (FK a ': fs) ps       = (a -> a) ': ExpandFieldFunction fs ps
   ExpandFieldFunction (FP n ': fs) ps       = (ps :!: n) ': ExpandFieldFunction fs ps
-  ExpandFieldFunction ((f :@: as) ': fs) ps = (f :$: ExpandField as (Domains ps) -> f :$: ExpandField as (Codomains ps)) ': ExpandFieldFunction fs ps
+  ExpandFieldFunction ((f :@: as) ': fs) ps = (f :$: ExpandFields as (Domains ps) -> f :$: ExpandFields as (Codomains ps)) ': ExpandFieldFunction fs ps
 
 class AdaptFieldFunction (f :: [Field *]) (fs :: [*]) t where
   adaptFieldFunction :: Applicative t => Proxy f -> Proxy fs -> Proxy t -> HList (AppMap fs t) -> HList (AppMap (ExpandFieldFunction f fs) t)
@@ -142,8 +145,8 @@ instance (GFPMTraversable n fs t,
   adaptFieldFunction _ pf pt fs = HCons (mtraverseGFP (Proxy :: Proxy n) pf fs) (adaptFieldFunction (Proxy :: Proxy as) pf pt fs)
 
 instance (MTraversable f (ExpandFieldFunction bs fs) t,
-          (f :$: ExpandField bs (Codomains fs)) ~ (f :$: Codomains (ExpandFieldFunction bs fs)),
-          (f :$: ExpandField bs (Domains fs)) ~ (f :$: Domains (ExpandFieldFunction bs fs)),
+          (f :$: ExpandFields bs (Codomains fs)) ~ (f :$: Codomains (ExpandFieldFunction bs fs)),
+          (f :$: ExpandFields bs (Domains fs)) ~ (f :$: Domains (ExpandFieldFunction bs fs)),
           AdaptFieldFunction bs fs t,
           AdaptFieldFunction as fs t
          )
@@ -151,8 +154,8 @@ instance (MTraversable f (ExpandFieldFunction bs fs) t,
   adaptFieldFunction _ pf pt fs = HCons (mtraverseP (Proxy :: Proxy f) (Proxy :: Proxy (ExpandFieldFunction bs fs)) pt (adaptFieldFunction (Proxy :: Proxy bs) pf pt fs)) (adaptFieldFunction (Proxy :: Proxy as) pf pt fs)
 
 instance (MTraversable f (ExpandFieldFunction as fs) t,
-          (f :$: ExpandField as (Codomains fs)) ~ (f :$: Codomains (ExpandFieldFunction as fs)),
-          (f :$: ExpandField as (Domains fs)) ~ (f :$: Domains (ExpandFieldFunction as fs)),
+          (f :$: ExpandFields as (Codomains fs)) ~ (f :$: Codomains (ExpandFieldFunction as fs)),
+          (f :$: ExpandFields as (Domains fs)) ~ (f :$: Domains (ExpandFieldFunction as fs)),
           AdaptFieldFunction as fs t
          )
          => GFMTraversable (f :@: as) fs t where

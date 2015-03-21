@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds, MultiParamTypeClasses, FunctionalDependencies, TypeOperators, PolyKinds, TypeFamilies, FlexibleInstances, ScopedTypeVariables, UndecidableInstances, DefaultSignatures, FlexibleContexts #-}
+{-# OPTIONS_HADDOCK prune #-}
 
 module Data.MFunctor where
 
@@ -10,13 +11,23 @@ import Data.Proxy
 import Data.Nat
 import Unsafe.Coerce
 
-data Variance = CoV | ContraV
+-- TODO : add invariant / bivariant ?
 
+-- | `Variance` kind used in `MFunctor`
+data Variance = CoV     -- ^ `Variance` for covariant parameters
+              | ContraV -- ^ `Variance` for contravariant parameters
+
+-- | > Domain (a -> b) CoV ~ a
+--   > Domain (a -> b) ContraV ~ b
+--   > Domains fs vs ~ Map (Uncurry Domain) (Zip fs vs)
 type family Domains fs vs where
   Domains '[]              '[]             = '[]
   Domains ((a -> b) ': as) (CoV ': vs)     = a ': Domains as vs
   Domains ((a -> b) ': as) (ContraV ': vs) = b ': Domains as vs
   
+-- | > Codomain (a -> b) CoV ~ b
+--   > Codomain (a -> b) ContraV ~ a
+--   > Codomains fs vs ~ Map (Uncurry Codomain) (Zip fs vs)
 type family Codomains fs vs where
   Codomains '[]              '[]             = '[]
   Codomains ((a -> b) ': as) (CoV ': vs)     = b ': Codomains as vs
@@ -25,7 +36,15 @@ type family Codomains fs vs where
 type family Flip f where
   Flip (a -> b) = (b -> a)
 
+-- TODO : move the (f -> vs) functional dependency to a separate type class, to allow deriving of functor instances from bifunctor/... instances ? (class Variant f vs | f -> vs) ? (class Variant f where type Variances f :: [Variance]) ?
+
+-- | `MFunctor` type class, generalisation of `Data.Functor.Functor`, `Data.Bifunctor.Bifunctor`, `Data.Functor.Contravariant.Contravariant`, `Data.Profunctor.Profunctor`, etc.
+--
+-- If `f` has a `MGeneric` instance, and types that appear in `f` have a `MFunctor` instance, it is possible to derive a `MFunctor` instance for f.
+--
+-- >>> instance MFunctor [] '[a -> a'] '[CoV]
 class MFunctor (f :: k) (fs :: [*]) (vs ::  [Variance]) | f -> vs, fs -> k, vs -> k where
+  -- | see `mmap`
   mmapP :: Proxy f -> Proxy vs -> HList fs -> f :$: Domains fs vs -> f :$: Codomains fs vs
   default mmapP :: ( MGeneric (f :$: Domains fs vs), MGeneric (f :$: Codomains fs vs),
                      Rep (f :$: Domains fs vs) ~ Rep (f :$: Codomains fs vs),
@@ -35,10 +54,15 @@ class MFunctor (f :: k) (fs :: [*]) (vs ::  [Variance]) | f -> vs, fs -> k, vs -
                    ) => Proxy f -> Proxy vs -> HList fs -> f :$: Domains fs vs -> f :$: Codomains fs vs
   mmapP _ pv fs = to . mmapG pv fs . from
 
+-- | Proxy-less `mmapP`, generalisation of `fmap`, `Data.Bifunctor.bimap`, `Data.Functor.Contravariant.contramap`, `Data.Profunctor.dimap`, etc.
+--
+-- If f is covariant in all its parameters (its variances are '[CoV, CoV, ..., CoV]) :
+-- 
+-- > mmap :: HList '[a1 -> b1, ..., an -> bn] -> f a1 ... an -> f b1 ... bn
 mmap :: forall a b f fs vs.
-        ( Unapply a f (Domains fs vs),
-          Unapply b f (Codomains fs vs),
-          MFunctor f fs vs
+        ( Unapply a f (Domains fs vs)
+        , Unapply b f (Codomains fs vs)
+        , MFunctor f fs vs
         ) => HList fs -> a -> b
 mmap = mmapP (Proxy :: Proxy f) (Proxy :: Proxy vs)
 
@@ -88,8 +112,8 @@ type family ExpandFieldFunction (f :: [Field *]) (vfs :: [Variance]) (ps :: [*])
   ExpandFieldFunction (FK a ': fs)       (v ': vfs)       ps vs = (a -> a) ': ExpandFieldFunction fs vfs ps vs
   ExpandFieldFunction (FP n ': fs)       (CoV ': vfs)     ps vs = (ps :!: n) ': ExpandFieldFunction fs vfs ps vs
   ExpandFieldFunction (FP n ': fs)       (ContraV ': vfs) ps vs = (ps :!: n) ': ExpandFieldFunction fs vfs ps vs
-  ExpandFieldFunction ((f :@: as) ': fs) (CoV ': vfs)     ps vs = (f :$: ExpandField as (Domains ps vs) -> f :$: ExpandField as (Codomains ps vs)) ': ExpandFieldFunction fs vfs ps vs
-  ExpandFieldFunction ((f :@: as) ': fs) (ContraV ': vfs) ps vs = (f :$: ExpandField as (Codomains ps vs) -> f :$: ExpandField as (Domains ps vs)) ': ExpandFieldFunction fs vfs ps vs
+  ExpandFieldFunction ((f :@: as) ': fs) (CoV ': vfs)     ps vs = (f :$: ExpandFields as (Domains ps vs) -> f :$: ExpandFields as (Codomains ps vs)) ': ExpandFieldFunction fs vfs ps vs
+  ExpandFieldFunction ((f :@: as) ': fs) (ContraV ': vfs) ps vs = (f :$: ExpandFields as (Codomains ps vs) -> f :$: ExpandFields as (Domains ps vs)) ': ExpandFieldFunction fs vfs ps vs
 
 class AdaptFieldFunction (f :: [Field *]) (vfs :: [Variance]) (ps :: [*]) (vs :: [Variance]) where
   adaptFieldFunction :: Proxy f -> Proxy vfs -> Proxy vs -> HList ps -> HList (ExpandFieldFunction f vfs ps vs)
@@ -121,8 +145,8 @@ instance (GFPMFunctor n ps vs ,
     (adaptFieldFunction (Proxy :: Proxy as) (Proxy :: Proxy vfs) pv ps)
 
 instance ( MFunctor f (ExpandFieldFunction bs vs' ps vs) vs',
-           ExpandField bs (Codomains ps vs) ~ Codomains (ExpandFieldFunction bs vs' ps vs) vs',
-           ExpandField bs (Domains ps vs) ~ Domains (ExpandFieldFunction bs vs' ps vs) vs',
+           ExpandFields bs (Codomains ps vs) ~ Codomains (ExpandFieldFunction bs vs' ps vs) vs',
+           ExpandFields bs (Domains ps vs) ~ Domains (ExpandFieldFunction bs vs' ps vs) vs',
            AdaptFieldFunction bs vs' ps vs,
            AdaptFieldFunction as vfs ps vs 
          )
@@ -138,8 +162,8 @@ type family FlipVariance vs where
   FlipVariance (ContraV ': vs) = CoV ': FlipVariance vs
 
 instance ( MFunctor f (ExpandFieldFunction bs (FlipVariance vs') ps vs) vs'
-         , ExpandField bs (Domains ps vs) ~ Codomains (ExpandFieldFunction bs (FlipVariance vs') ps vs) vs'
-         , ExpandField bs (Codomains ps vs) ~ Domains (ExpandFieldFunction bs (FlipVariance vs') ps vs) vs'
+         , ExpandFields bs (Domains ps vs) ~ Codomains (ExpandFieldFunction bs (FlipVariance vs') ps vs) vs'
+         , ExpandFields bs (Codomains ps vs) ~ Domains (ExpandFieldFunction bs (FlipVariance vs') ps vs) vs'
          , AdaptFieldFunction bs (FlipVariance vs') ps vs
          , AdaptFieldFunction as vfs ps vs 
          )
@@ -150,8 +174,8 @@ instance ( MFunctor f (ExpandFieldFunction bs (FlipVariance vs') ps vs) vs'
     (adaptFieldFunction (Proxy :: Proxy as) (Proxy :: Proxy vfs) pv ps)
 
 instance (MFunctor f (ExpandFieldFunction as vs' ps vs) vs',
-          ExpandField as (Codomains ps vs) ~ Codomains (ExpandFieldFunction as vs' ps vs) vs',
-          ExpandField as (Domains ps vs) ~ Domains (ExpandFieldFunction as vs' ps vs) vs',
+          ExpandFields as (Codomains ps vs) ~ Codomains (ExpandFieldFunction as vs' ps vs) vs',
+          ExpandFields as (Domains ps vs) ~ Domains (ExpandFieldFunction as vs' ps vs) vs',
           AdaptFieldFunction as vs' ps vs
           )
          => GFMFunctor (f :@: as) ps vs where

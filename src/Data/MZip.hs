@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds, MultiParamTypeClasses, FunctionalDependencies, TypeOperators, PolyKinds, TypeFamilies, FlexibleInstances, ScopedTypeVariables, UndecidableInstances, DefaultSignatures, FlexibleContexts #-}
+{-# OPTIONS_HADDOCK prune #-}
 
-module Data.MZipWith where
+module Data.MZip where
 
 import Data.MGeneric
 import Data.Unapply
@@ -27,10 +28,6 @@ type family LCodoms (n :: Nat) (fs :: [*]) where
   LCodoms NZ     fs = fs
   LCodoms (NS n) fs = LCodoms n (Codoms fs)
 
-type family Map (f :: * -> *) (as :: [*]) :: [*] where
-  Map f '[]       = '[]
-  Map f (a ': as) = f a ': Map f as
-
 type family ZipInput n f where
   ZipInput NZ     a        = Maybe a
   ZipInput (NS n) (a -> b) = a -> ZipInput n b
@@ -38,7 +35,7 @@ type family ZipInput n f where
 type family ZipInputs n fs where
   ZipInputs n '[]       = '[]
   ZipInputs n (f ': fs) = ZipInput n f ': ZipInputs n fs
-         
+
 type family ZipWithType' (n :: Nat) (f :: k) (fs :: [*]) :: * where
   ZipWithType' NZ     f fs = (f :$: fs)
   ZipWithType' (NS n) f fs = f :$: (Doms fs) -> ZipWithType' n f (Codoms fs)
@@ -69,7 +66,9 @@ instance ( MZipWithG n f rf (Codoms fs)
          ) => MZipWithG (NS n) f rf fs where
   mzipWithPG _ pf prf _ a b = mzipWithPG (Proxy :: Proxy n) pf prf (Proxy :: Proxy (Codoms fs)) (a (from b))
 
+-- |
 class MZipWith (n :: Nat) (f :: k) (fs :: [*]) where
+  -- |
   mzipWithP :: Proxy n -> Proxy f -> Proxy fs -> HList (ZipInputs n fs) -> ZipWithType n f fs
   default mzipWithP :: ( rf ~ Rep (f :$: LCodoms n fs)
                        , MZipWithG n f rf fs
@@ -77,6 +76,27 @@ class MZipWith (n :: Nat) (f :: k) (fs :: [*]) where
                        ) => Proxy n -> Proxy f -> Proxy fs -> HList (ZipInputs n fs) -> ZipWithType n f fs
   mzipWithP pn pf pfs fs = mzipWithPG pn pf prf (Proxy :: Proxy fs) (mzipWithG pn prf pfs fs)
     where prf = Proxy :: Proxy (Rep (f :$: LCodoms n fs))
+
+
+class (ZipInput n f ~ a) => ZipInputC n f a | n f -> a, a -> f
+instance ZipInputC NZ a (Maybe a)
+instance ZipInputC n b c => ZipInputC (NS n) (a -> b) (a -> c)
+
+class (ZipInputs n fs ~ a) => ZipInputsC n fs a | n fs -> a, a -> fs
+instance ZipInputsC n '[] '[]
+instance (ZipInputC n f c, ZipInputsC n fs b) => ZipInputsC n (f ': fs) (c ': b)
+
+class (ZipWithType n f fs ~ a) => ZipWithTypeC n f fs a | n f fs -> a, a -> n f fs
+instance Unapply a f fs => ZipWithTypeC NZ f fs (Maybe a)
+instance (Unapply a f (Doms fs), ZipWithTypeC n f (Codoms fs) b) => ZipWithTypeC (NS n) f fs (a -> b)
+
+-- | `mzipWith` zips n structures together if they have the same shape, or fails (with `Nothing`) if the shapes do not match.
+mzipWith :: forall n f fs a b.
+            ( MZipWith n f fs
+            , ZipInputsC n fs a
+            , ZipWithTypeC n f fs b
+            ) => HList a -> b
+mzipWith = mzipWithP (Proxy :: Proxy n) (Proxy :: Proxy f) (Proxy :: Proxy fs)
 
 class GMZipWith (n :: Nat) (f :: Un *) (fs :: [*]) where
   mzipWithG :: Proxy n -> Proxy f -> Proxy fs -> HList (ZipInputs n fs) -> ZipWithTypeUn n f fs
@@ -154,15 +174,8 @@ instance ( (ZipInputs (NS n) fs :!: m) ~ (Doms fs :!: m -> ZipInputs n (Codoms f
          , GFPMZipWith n m (Codoms fs)
          ) => GFPMZipWith (NS n) m fs where
   mzipWithGFP _ _ _ f (InP a) = mzipWithGFP (Proxy :: Proxy n) (Proxy :: Proxy m) (Proxy :: Proxy (Codoms fs)) (f a)
-instance (GFPMZipWith n m fs, HLookup m n fs) => GFMZipWith n (FP m) fs where
-  mzipWithGF pn _ pf fs = mzipWithGFP (Proxy :: Proxy n) (Proxy :: Proxy m) pf (hlookup (Proxy :: Proxy m) pn pf fs)
-
-class HLookup n m fs where
-  hlookup :: Proxy n -> Proxy m -> Proxy fs -> HList (ZipInputs m fs) -> ZipInputs m fs :!: n
-instance HLookup NZ m (a ': as) where
-  hlookup _ _ _ (HCons f _) = f
-instance HLookup n m as => HLookup (NS n) m (a ': as) where
-  hlookup _ pm _ (HCons _ fs) = hlookup (Proxy :: Proxy n) pm (Proxy :: Proxy as) fs
+instance (GFPMZipWith n m fs, HLookup m (ZipInputs n fs)) => GFMZipWith n (FP m) fs where
+  mzipWithGF pn _ pf fs = mzipWithGFP (Proxy :: Proxy n) (Proxy :: Proxy m) pf (hlookup (Proxy :: Proxy m) (Proxy :: Proxy (ZipInputs n fs)) fs)
 
 -- type family NId n a where
 --   NId NZ     a = a
@@ -180,13 +193,13 @@ class AdaptFieldFunction (n :: Nat) (f :: [Field *]) (ps :: [*]) where
 instance AdaptFieldFunction n '[] ps where
   adaptFieldFunction _ _ _ fs = HNil
 
-instance ( HLookup m n ps
+instance ( HLookup m (ZipInputs n ps)
          , ZipInput n (ps :!: m) ~ (ZipInputs n ps :!: m)
          , AdaptFieldFunction n as ps
          ) => AdaptFieldFunction n (FP m ': as) ps where
   adaptFieldFunction _ _ pf fs =
     HCons
-    (hlookup (Proxy :: Proxy m) (Proxy :: Proxy n) pf fs)
+    (hlookup (Proxy :: Proxy m) (Proxy :: Proxy (ZipInputs n ps)) fs)
     (adaptFieldFunction (Proxy :: Proxy n) (Proxy :: Proxy as) pf fs)
 
 instance ( MZipWith n f (ExpandFieldFunction n bs ps)
@@ -203,12 +216,12 @@ instance ( MZipWith n f (ExpandFieldFunction n bs ps)
 
 class GFAMZipWith n f as fs where
   mzipWithGFA :: Proxy n -> Proxy f -> Proxy as -> Proxy fs -> ZipWithType n f (ExpandFieldFunction n as fs) -> ZipWithTypeField n (f :@: as) fs
-instance (ExpandField as fs ~ ExpandFieldFunction NZ as fs)
+instance (ExpandFields as fs ~ ExpandFieldFunction NZ as fs)
          => GFAMZipWith NZ f as fs where
   mzipWithGFA _ _ _ _ (Just a) = Just (InA a)
   mzipWithGFA _ _ _ _ Nothing  = Nothing
 instance ( ExpandFieldFunction n as (Codoms fs) ~ Codoms (ExpandFieldFunction (NS n) as fs)
-         , Doms (ExpandFieldFunction (NS n) as fs) ~ ExpandField as (Doms fs)
+         , Doms (ExpandFieldFunction (NS n) as fs) ~ ExpandFields as (Doms fs)
          , GFAMZipWith n f as (Codoms fs)
          ) => GFAMZipWith (NS n) f as fs where
   mzipWithGFA _ pf pa _ a (InA b) = mzipWithGFA (Proxy :: Proxy n) pf pa (Proxy :: Proxy (Codoms fs)) (a (unsafeCoerce b))

@@ -1,4 +1,5 @@
 {-# LANGUAGE DataKinds, MultiParamTypeClasses, FunctionalDependencies, TypeOperators, PolyKinds, TypeFamilies, FlexibleInstances, ScopedTypeVariables, UndecidableInstances, DefaultSignatures, FlexibleContexts, InstanceSigs #-}
+{-# OPTIONS_HADDOCK prune #-}
 
 module Data.MFoldable where
 
@@ -12,13 +13,17 @@ import Unsafe.Coerce
 
 import Data.Monoid
 
--- FoldMap
-
+-- | > MonoidMap as m ~ Map (\a -> (a -> m)) as
 type family MonoidMap as m where
   MonoidMap '[]       m = '[]
   MonoidMap (a ': as) m = (a -> m) ': MonoidMap as m
-             
+
+-- | `MFoldable` type class, generalisation of `Data.Foldable.Foldable`, `Data.Bifoldable.Bifoldable`, etc.
+--
+-- >>> instance MFoldable (,,) '[a, b, c]
+-- >>> mfoldMap (Sum `HCons` (Sum . length) `HCons` const mempty `HCons` HNil) (1, "foobar", 5) = 7
 class MFoldable (f :: k) (as :: [*]) | as -> k where
+  -- | see `mfoldMap`
   mfoldMapP :: Monoid m => Proxy f -> Proxy as -> HList (MonoidMap as m) -> f :$: as -> m
   default mfoldMapP :: (MGeneric (f :$: as), as ~ Pars (f :$: as),
                         GMFoldable (Rep (f :$: as)) as,
@@ -27,6 +32,12 @@ class MFoldable (f :: k) (as :: [*]) | as -> k where
                        =>  Proxy f -> Proxy as -> HList (MonoidMap as m) -> f :$: as -> m
   mfoldMapP _ _ fs = mfoldMapG fs . from
 
+
+-- | Map elements of each parameter type of a structure to a monoid, and combine the results.
+--
+-- Proxy-less version of mfoldMapP
+--
+-- > mfoldMap :: HList '[a1 -> m, ..., an -> m] -> f :$: '[a1, ..., an] -> m
 mfoldMap :: forall m a f as.
             ( Monoid m,
               Unapply a f as,
@@ -34,18 +45,14 @@ mfoldMap :: forall m a f as.
             ) => HList (MonoidMap as m) -> a -> m
 mfoldMap = mfoldMapP (Proxy :: Proxy f) (Proxy :: Proxy as)
 
--- Fold
-
 class Repeat m as where
   repeatId :: Proxy m -> Proxy as -> HList (MonoidMap as m)
-  
 instance Repeat m '[] where
   repeatId _ _ = HNil
-
 instance Repeat m as => Repeat m (m ': as) where
   repeatId pm _ = HCons id (repeatId pm (Proxy :: Proxy as))
 
-
+-- | Combine the elements of a structure when all its parameters are the same monoid.
 mfold :: forall m f as a.
          ( Monoid m,
            Repeat m as,
@@ -94,7 +101,7 @@ instance GFPMFoldable n as => GFPMFoldable (NS n) (a ': as) where
   mfoldMapGFP _ p (HCons _ fs) = mfoldMapGFP (Proxy :: Proxy n) (Proxy :: Proxy as) fs
 
 class AdaptFieldMonoid (f :: [Field *]) (as :: [*]) where
-  adaptFieldMonoid :: Monoid m => Proxy f -> Proxy as -> Proxy m -> HList (MonoidMap as m) -> HList (MonoidMap (ExpandField f as) m)
+  adaptFieldMonoid :: Monoid m => Proxy f -> Proxy as -> Proxy m -> HList (MonoidMap as m) -> HList (MonoidMap (ExpandFields f as) m)
   
 instance AdaptFieldMonoid '[] fs where
   adaptFieldMonoid _ _ _ fs = HNil
@@ -105,12 +112,12 @@ instance AdaptFieldMonoid as fs => AdaptFieldMonoid (FK a ': as) fs where
 instance (GFPMFoldable n fs, AdaptFieldMonoid as fs) => AdaptFieldMonoid (FP n ': as) fs where
   adaptFieldMonoid _ pf pm fs = HCons (mfoldMapGFP (Proxy :: Proxy n) (Proxy :: Proxy fs) fs) (adaptFieldMonoid (Proxy :: Proxy as) pf pm fs)
                                                      
-instance (MFoldable f (ExpandField bs fs), AdaptFieldMonoid bs fs, AdaptFieldMonoid as fs)
+instance (MFoldable f (ExpandFields bs fs), AdaptFieldMonoid bs fs, AdaptFieldMonoid as fs)
          => AdaptFieldMonoid ((f :@: bs) ': as) fs where
-  adaptFieldMonoid _ pf pm fs = HCons (mfoldMapP (Proxy :: Proxy f) (Proxy :: Proxy (ExpandField bs fs)) (adaptFieldMonoid (Proxy :: Proxy bs) pf pm fs)) (adaptFieldMonoid (Proxy :: Proxy as) pf pm fs)
+  adaptFieldMonoid _ pf pm fs = HCons (mfoldMapP (Proxy :: Proxy f) (Proxy :: Proxy (ExpandFields bs fs)) (adaptFieldMonoid (Proxy :: Proxy bs) pf pm fs)) (adaptFieldMonoid (Proxy :: Proxy as) pf pm fs)
 
-instance (MFoldable f (ExpandField as bs), AdaptFieldMonoid as bs)
+instance (MFoldable f (ExpandFields as bs), AdaptFieldMonoid as bs)
          => GFMFoldable (f :@: as) bs where
   mfoldMapGF :: forall m. Monoid m => HList (MonoidMap bs m) -> InField (f :@: as) bs -> m
   mfoldMapGF fs (InA a) =
-    mfoldMapP (Proxy :: Proxy f) (Proxy :: Proxy (ExpandField as bs)) (adaptFieldMonoid (Proxy :: Proxy as) (Proxy :: Proxy bs) (Proxy :: Proxy m) fs) (unsafeCoerce a)
+    mfoldMapP (Proxy :: Proxy f) (Proxy :: Proxy (ExpandFields as bs)) (adaptFieldMonoid (Proxy :: Proxy as) (Proxy :: Proxy bs) (Proxy :: Proxy m) fs) (unsafeCoerce a)

@@ -14,7 +14,7 @@ import Data.HList.TH
 import Data.MFunctor
 import Data.MFoldable
 import Data.MTraversable
-import Data.MZipWith
+import Data.MZip
 
 import Data.Monoid
 import Control.Applicative
@@ -159,11 +159,3 @@ instance ( MZipWithG n Last (Rep (Last :$: LCodoms n '[f])) '[f]
 instance ( MZipWithG n First (Rep (First :$: LCodoms n '[f])) '[f]
          , GMZipWith n (Rep (First :$: LCodoms n '[f])) '[f]
          ) => MZipWith n First '[f]
-
-data Test a b c = Test ([(a, [b])], c)
-                deriving (Show)
-deriveMGeneric ''Test
-instance Unapply (Test a b c) Test '[a, b, c]
-instance ( MZipWithG n Test (Rep (Test :$: LCodoms n '[f, g, h])) '[f, g, h]
-         , GMZipWith n (Rep (Test :$: LCodoms n '[f, g, h])) '[f, g, h]
-         ) => MZipWith n Test '[f, g, h]
