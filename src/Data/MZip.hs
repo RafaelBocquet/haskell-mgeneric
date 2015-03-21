@@ -91,12 +91,30 @@ instance Unapply a f fs => ZipWithTypeC NZ f fs (Maybe a)
 instance (Unapply a f (Doms fs), ZipWithTypeC n f (Codoms fs) b) => ZipWithTypeC (NS n) f fs (a -> b)
 
 -- | `mzipWith` zips n structures together if they have the same shape, or fails (with `Nothing`) if the shapes do not match.
-mzipWith :: forall n f fs a b.
+mzipWith :: forall n f fs b.
             ( MZipWith n f fs
-            , ZipInputsC n fs a
+            , MakeZipInputs n fs
             , ZipWithTypeC n f fs b
-            ) => HList a -> b
-mzipWith = mzipWithP (Proxy :: Proxy n) (Proxy :: Proxy f) (Proxy :: Proxy fs)
+            , ZipInputsC n fs (ZipInputs n fs)
+            ) => HList fs -> b
+mzipWith fs = mzipWithP (Proxy :: Proxy n) (Proxy :: Proxy f) (Proxy :: Proxy fs) (makeZipInputs (Proxy :: Proxy n) fs)
+
+class MakeZipInput n f where
+  makeZipInput :: Proxy n -> f -> ZipInput n f
+instance MakeZipInput NZ a where
+  makeZipInput _ = Just
+instance MakeZipInput n b => MakeZipInput (NS n) (a -> b) where
+  makeZipInput _ f a = makeZipInput (Proxy :: Proxy n) (f a)
+
+class MakeZipInputs n fs where
+  makeZipInputs :: ZipInputsC n fs a => Proxy n -> HList fs -> HList a
+instance MakeZipInputs n '[] where
+  makeZipInputs _ _ = HNil
+instance ( MakeZipInput n f
+         , MakeZipInputs n fs
+         , ZipInputsC n fs (ZipInputs n fs)
+         ) => MakeZipInputs n (f ': fs) where
+  makeZipInputs pn (HCons f fs) = HCons (makeZipInput pn f) (makeZipInputs pn fs)
 
 class GMZipWith (n :: Nat) (f :: Un *) (fs :: [*]) where
   mzipWithG :: Proxy n -> Proxy f -> Proxy fs -> HList (ZipInputs n fs) -> ZipWithTypeUn n f fs

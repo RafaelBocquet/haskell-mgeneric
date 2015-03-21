@@ -95,7 +95,7 @@ ghci> evalState ?? "A"
 Test ([(1,["0"]),(0,["1","a"]),(1,["3","foo"])],'e')
 ```
 
-## [MZipWith](src/Data/MZip.hs) (Does not work yet without proxy types)
+## [MZipWith](src/Data/MZip.hs)
 
 ```mzipWith``` zips n structures together if they have the same shape, or fails (with `Nothing`) if the shapes do not match.
 
@@ -136,7 +136,6 @@ Just (Test ([(1,["0"]),(1,["a1","ba"]),(4,["foo3","barfoo"])],0))
 * Add more generic type classes
 * Add inline annotations
 * Add documentation
-* Remove Maybe in ZipWith interface
 * Handle FK in ZipWith ?
 * Reduce the need for Proxy types
 * Find more suitable names for type level functions
