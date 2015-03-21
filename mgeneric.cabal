@@ -10,13 +10,11 @@ cabal-version:       >=1.10
 homepage:            http://github.com/RafaelBocquet/haskell-mgeneric/
 bug-reports:         http://github.com/RafaelBocquet/haskell-mgeneric/issues
 synopsis:            Generics with multiple parameters
-description:         This package provides an implementation of generics with multiple parameters in Haskell, as described in http://dreixel.net/research/pdf/gpmp_colour.pdf.
-
-                     
-                     A MGeneric instance can be derived for most datatypes with ```deriveMGeneric ''Type```
-
-                     
-                     It also provides the type classes MFunctor, MFoldable and MTraversable, generalisations of Functor, Foldable and Traversable to kinds other than (* -> *), and the type class MZipWith.
+description:         This package provides an implementation of generics with multiple parameters in Haskell, as described in <http://dreixel.net/research/pdf/gpmp_colour.pdf>.
+                     .                     
+                     A MGeneric instance can be derived for most datatypes with @deriveMGeneric ''Type@
+                     .
+                     It also provides the type classes 'MFunctor', 'MFoldable' and 'MTraversable', generalisations of 'Functor', 'Foldable' and 'Traversable' to kinds other than (* -> *), and the type class 'MZipWith'.
 extra-source-files:  README.md
 
                       
